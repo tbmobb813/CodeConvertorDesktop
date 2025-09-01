@@ -190,6 +190,36 @@ function App() {
   const [status, setStatus] = useState("Ready");
   const [history, setHistory] = useState<Array<{ root: string; tree: any[] }>>([]);
   const [future, setFuture] = useState<Array<{ root: string; tree: any[] }>>([]);
+  // Batch conversion state
+  const [batchResults, setBatchResults] = useState<any[] | null>(null);
+  const [dryRunResults, setDryRunResults] = useState<any[] | null>(null);
+  // For demo: select all .java files in workspace
+  function getAllJavaFiles(tree: any[]): string[] {
+    let files: string[] = [];
+    for (const n of tree) {
+      if (n.type === "file" && n.name.endsWith(".java")) files.push(n.path);
+      if (n.type === "dir" && n.children) files = files.concat(getAllJavaFiles(n.children));
+    }
+    return files;
+  }
+  async function runBatchConvert() {
+    if (!workspace) return;
+    setStatus("Batch converting...");
+    const filePaths = getAllJavaFiles(workspace.tree);
+    const res = await window.api.batchConvert(filePaths);
+    setBatchResults(res.results);
+    setStatus("Batch conversion done");
+    append(`[Batch] Converted ${filePaths.length} files.`);
+  }
+  async function runDryRunConvert() {
+    if (!workspace) return;
+    setStatus("Dry run...");
+    const filePaths = getAllJavaFiles(workspace.tree);
+    const res = await window.api.dryRunConvert(filePaths);
+    setDryRunResults(res.previews);
+    setStatus("Dry run complete");
+    append(`[Dry Run] Previewed ${filePaths.length} files.`);
+  }
 
   async function openWorkspace() {
     setStatus("Opening workspace...");
@@ -263,7 +293,7 @@ function App() {
   }
 
   return (
-    <div className="app">
+  <div className="app">
       <aside className="sidebar">
         <div className="toolbar">
                   <button onClick={openWorkspace}>Open Workspace</button>
@@ -285,6 +315,12 @@ function App() {
           <button onClick={saveConverted} disabled={!converted}>
             Save Converted
           </button>
+          <button onClick={runBatchConvert} disabled={!workspace} style={{ marginLeft: 8 }}>
+            Batch Convert (.java)
+          </button>
+          <button onClick={runDryRunConvert} disabled={!workspace} style={{ marginLeft: 4 }}>
+            Dry Run (.java)
+          </button>
           <span style={{ marginLeft: "auto", opacity: 0.7 }}>
             Lang: {language}
           </span>
@@ -294,6 +330,48 @@ function App() {
           modified={converted || "// Converted output will appear here"}
           language={language}
         />
+        {/* Batch results display */}
+        {batchResults && (
+          <div style={{ marginTop: 16 }}>
+            <h3>Batch Conversion Results</h3>
+            <ul>
+              {batchResults.map((r, i) => (
+                <li key={r.filePath || i} style={{ marginBottom: 8 }}>
+                  <b>{r.filePath}</b><br />
+                  {r.error ? (
+                    <span style={{ color: 'crimson' }}>Error: {r.error}</span>
+                  ) : (
+                    <span>
+                      <span style={{ color: 'green' }}>Converted</span>
+                      <pre style={{ background: '#f6f6f6', padding: 8 }}>{r.converted}</pre>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {/* Dry run results display */}
+        {dryRunResults && (
+          <div style={{ marginTop: 16 }}>
+            <h3>Dry Run Previews</h3>
+            <ul>
+              {dryRunResults.map((r, i) => (
+                <li key={r.filePath || i} style={{ marginBottom: 8 }}>
+                  <b>{r.filePath}</b><br />
+                  {r.error ? (
+                    <span style={{ color: 'crimson' }}>Error: {r.error}</span>
+                  ) : (
+                    <span>
+                      <span style={{ color: 'blue' }}>Diff Preview</span>
+                      <pre style={{ background: '#f0f8ff', padding: 8 }}>{r.diff || '[No changes]'}</pre>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </main>
 
       <section className="right">

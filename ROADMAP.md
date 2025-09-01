@@ -32,6 +32,13 @@
 - Refine UI based on user feedback
 - Prepare for v2 features (offline mode, plugin system, mobile viewer)
 
+- Enhance UI/UX states:
+  - Disabled state for buttons when actions are not possible
+  - Loading/busy state with spinners or indicators
+  - Active/selected state highlights for files, folders, and pipeline steps
+  - Visual feedback (color, opacity, icons) for disabled/active/loading
+  - Brief success/error messages after operations
+
 ---
 
 > This roadmap keeps the app focused, developer-friendly, and ready for real-world use. Adjust sprint order as needed based on feedback and priorities.

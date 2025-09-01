@@ -29,6 +29,64 @@ app.on("window-all-closed", () => {
     if (process.platform !== "darwin")
         app.quit();
 });
+// ---- Conversion helpers (mocked for now) ----
+async function convertCode(code, filePath) {
+    // TODO: Replace with real conversion logic
+    return {
+        converted: code + "\n// [converted]", // mock
+        diagnostics: [],
+        error: null,
+    };
+}
+// ---- Batch Conversion IPC ----
+ipcMain.handle("conversion:batch", async (_e, filePaths) => {
+    const results = [];
+    for (const filePath of filePaths) {
+        try {
+            const code = await fs.readFile(filePath, "utf8");
+            const res = await convertCode(code, filePath);
+            results.push({
+                filePath,
+                original: code,
+                converted: res.converted,
+                diagnostics: res.diagnostics,
+                error: res.error,
+            });
+        }
+        catch (err) {
+            let errorMsg = "Unknown error";
+            if (err instanceof Error)
+                errorMsg = err.message;
+            results.push({ filePath, error: errorMsg });
+        }
+    }
+    return { results };
+});
+// ---- Improved Dry Run IPC ----
+ipcMain.handle("conversion:dryrun", async (_e, filePaths) => {
+    const previews = [];
+    for (const filePath of filePaths) {
+        try {
+            const code = await fs.readFile(filePath, "utf8");
+            const res = await convertCode(code, filePath);
+            previews.push({
+                filePath,
+                original: code,
+                converted: res.converted,
+                diagnostics: res.diagnostics,
+                error: res.error,
+                diff: res.converted !== code ? "[diff available]" : null, // mock diff
+            });
+        }
+        catch (err) {
+            let errorMsg = "Unknown error";
+            if (err instanceof Error)
+                errorMsg = err.message;
+            previews.push({ filePath, error: errorMsg });
+        }
+    }
+    return { previews };
+});
 // ---- File system helpers ----
 async function readDirRecursive(root) {
     const entries = await fs.readdir(root, { withFileTypes: true });
