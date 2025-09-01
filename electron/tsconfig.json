@@ -1,0 +1,12 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "outDir": "../dist-electron",
+        "module": "ES2022",
+        "moduleResolution": "Bundler",
+        "noEmit": false
+    },
+    "include": [
+        "./**/*.ts"
+    ]
+}
