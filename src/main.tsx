@@ -11,23 +11,131 @@ type Node = {
 };
 
 function Tree({ nodes, onOpen }: { nodes: Node[]; onOpen: (n: Node) => void }) {
+  // Folder operations
+  const [busyPath, setBusyPath] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const handleCreate = async (parent: Node, isDir: boolean) => {
+    if (busyPath) return;
+    setBusyPath(parent.path + (isDir ? '/newfolder' : '/newfile'));
+    setError(null);
+    try {
+      const name = prompt(`Enter ${isDir ? "folder" : "file"} name:`);
+      if (!name) { setBusyPath(null); return; }
+      const newPath = parent.path + "/" + name;
+      await window.api.createFileOrDir(newPath, isDir);
+      window.location.reload();
+    } catch (e) {
+      setError("Create failed: " + (e?.message || e));
+      setBusyPath(null);
+    }
+  };
+  const handleRename = async (n: Node) => {
+    if (busyPath) return;
+    setBusyPath(n.path + '/rename');
+    setError(null);
+    try {
+      const name = prompt("Enter new name:", n.name);
+      if (!name || name === n.name) { setBusyPath(null); return; }
+      const newPath = n.path.substring(0, n.path.lastIndexOf("/") + 1) + name;
+      await window.api.renameFileOrDir(n.path, newPath);
+      window.location.reload();
+    } catch (e) {
+      setError("Rename failed: " + (e?.message || e));
+      setBusyPath(null);
+    }
+  };
+  const handleDelete = async (n: Node) => {
+    if (busyPath) return;
+    setBusyPath(n.path + '/delete');
+    setError(null);
+    try {
+      if (!confirm(`Delete ${n.type === "dir" ? "folder" : "file"} '${n.name}'?`)) { setBusyPath(null); return; }
+      await window.api.deleteFileOrDir(n.path);
+      window.location.reload();
+    } catch (e) {
+      setError("Delete failed: " + (e?.message || e));
+      setBusyPath(null);
+    }
+  };
   return (
-    <ul>
-      {nodes.map((n) => (
-        <li key={n.path}>
-          {n.type === "dir" ? (
-            <details open>
-              <summary>📁 {n.name}</summary>
-              <Tree nodes={n.children ?? []} onOpen={onOpen} />
-            </details>
-          ) : (
-            <div className="file" onClick={() => onOpen(n)}>
-              📄 {n.name}
-            </div>
-          )}
-        </li>
-      ))}
-    </ul>
+    <>
+      {error && <div style={{ color: 'crimson', marginBottom: 8 }}>{error}</div>}
+      <ul>
+        {nodes.map((n) => (
+          <li key={n.path}>
+            {n.type === "dir" ? (
+              <details open>
+                <summary>
+                  📁 {n.name}
+                  <button
+                    title="New File"
+                    style={{ marginLeft: 4, opacity: busyPath ? 0.5 : 1 }}
+                    disabled={!!busyPath}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCreate(n, false);
+                    }}
+                  >{busyPath === n.path + '/newfile' ? '...' : '+'}</button>
+                  <button
+                    title="New Folder"
+                    style={{ marginLeft: 2, opacity: busyPath ? 0.5 : 1 }}
+                    disabled={!!busyPath}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCreate(n, true);
+                    }}
+                  >{busyPath === n.path + '/newfolder' ? '...' : '📁+'}</button>
+                  <button
+                    title="Rename"
+                    style={{ marginLeft: 2, opacity: busyPath ? 0.5 : 1 }}
+                    disabled={!!busyPath}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRename(n);
+                    }}
+                  >{busyPath === n.path + '/rename' ? '...' : '✎'}</button>
+                  <button
+                    title="Delete"
+                    style={{ marginLeft: 2, opacity: busyPath ? 0.5 : 1 }}
+                    disabled={!!busyPath}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(n);
+                    }}
+                  >{busyPath === n.path + '/delete' ? '...' : '🗑️'}</button>
+                </summary>
+                <Tree nodes={n.children ?? []} onOpen={onOpen} />
+              </details>
+            ) : (
+              <div
+                className="file"
+                style={{ display: "inline-block" }}
+              >
+                <span onClick={() => onOpen(n)}>📄 {n.name}</span>
+                <button
+                  title="Rename"
+                  style={{ marginLeft: 4, opacity: busyPath ? 0.5 : 1 }}
+                  disabled={!!busyPath}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRename(n);
+                  }}
+                >{busyPath === n.path + '/rename' ? '...' : '✎'}</button>
+                <button
+                  title="Delete"
+                  style={{ marginLeft: 2, opacity: busyPath ? 0.5 : 1 }}
+                  disabled={!!busyPath}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(n);
+                  }}
+                >{busyPath === n.path + '/delete' ? '...' : '🗑️'}</button>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 
@@ -80,12 +188,16 @@ function App() {
   const [language, setLanguage] = useState("typescript");
   const [logs, setLogs] = useState<string>("");
   const [status, setStatus] = useState("Ready");
+  const [history, setHistory] = useState<Array<{ root: string; tree: any[] }>>([]);
+  const [future, setFuture] = useState<Array<{ root: string; tree: any[] }>>([]);
 
   async function openWorkspace() {
     setStatus("Opening workspace...");
     if (window.api && window.api.openWorkspace) {
       const ws = await window.api.openWorkspace();
       if (ws) {
+        setHistory([]);
+        setFuture([]);
         setWorkspace(ws);
         setStatus("Ready");
       } else {
@@ -136,11 +248,27 @@ function App() {
     setLogs((prev) => prev + (prev ? "\n" : "") + line);
   }
 
+  function undo() {
+    if (!workspace || history.length === 0) return;
+    setFuture((prev) => [workspace, ...prev]);
+    setWorkspace(history[history.length - 1]);
+    setHistory((prev) => prev.slice(0, -1));
+  }
+
+  function redo() {
+    if (!workspace || future.length === 0) return;
+    setHistory((prev) => [...prev, workspace]);
+    setWorkspace(future[0]);
+    setFuture((prev) => prev.slice(1));
+  }
+
   return (
     <div className="app">
       <aside className="sidebar">
         <div className="toolbar">
-          <button onClick={openWorkspace}>Open Workspace</button>
+                  <button onClick={openWorkspace}>Open Workspace</button>
+                  <button onClick={undo} disabled={history.length === 0}>Undo</button>
+                  <button onClick={redo} disabled={future.length === 0}>Redo</button>
         </div>
         {workspace ? (
           <Tree nodes={workspace.tree} onOpen={openFile} />
