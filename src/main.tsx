@@ -73,19 +73,25 @@ function DiffEditor({
 }
 
 function App() {
-  const [workspace, setWorkspace] = useState<{
-    root: string;
-    tree: Node[];
-  } | null>(null);
+  const [workspace, setWorkspace] = useState<{ root: string; tree: any[] } | null>(null);
   const [currentFile, setCurrentFile] = useState<Node | null>(null);
   const [original, setOriginal] = useState("");
   const [converted, setConverted] = useState("");
   const [language, setLanguage] = useState("typescript");
   const [logs, setLogs] = useState<string>("");
+  const [status, setStatus] = useState("Ready");
 
   async function openWorkspace() {
-    const res = await window.api.openWorkspace();
-    if (res) setWorkspace(res);
+    setStatus("Opening workspace...");
+    if (window.api && window.api.openWorkspace) {
+      const ws = await window.api.openWorkspace();
+      if (ws) {
+        setWorkspace(ws);
+        setStatus("Ready");
+      } else {
+        setStatus("No folder selected");
+      }
+    }
   }
 
   async function openFile(n: Node) {
