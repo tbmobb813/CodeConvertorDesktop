@@ -36,6 +36,86 @@ ipcMain.handle("workspace:open", async () => {
                 if (process.platform !== 'darwin')
                     app.quit();
             });
+            // ---------- Helpers ----------
+            // ---- File/folder operations IPC ----
+            ipcMain.handle('fs:create', async (_e, p, isDir) => {
+                if (isDir)
+                    await fs.mkdir(p, { recursive: true });
+                else {
+                    await fs.mkdir(path.dirname(p), { recursive: true });
+                    await fs.writeFile(p, '');
+                }
+                return true;
+            });
+            ipcMain.handle('fs:rename', async (_e, from, to) => { await fs.rename(from, to); return true; });
+            ipcMain.handle('fs:delete', async (_e, p) => {
+                const st = await fs.stat(p).catch(() => null);
+                if (!st)
+                    return true;
+                if (st.isDirectory())
+                    await fs.rm(p, { recursive: true, force: true });
+                else
+                    await fs.unlink(p);
+                return true;
+            });
+            // ---- Conversion helpers (mocked for now) ----
+            async function convertCode(code, filePath) {
+                // TODO: Replace with real conversion logic
+                return {
+                    converted: code + "\n// [converted]", // mock
+                    diagnostics: [],
+                    error: null,
+                };
+            }
+            // ---- Batch Conversion IPC ----
+            ipcMain.handle("conversion:batch", async (_e, filePaths) => {
+                const results = [];
+                for (const filePath of filePaths) {
+                    try {
+                        const code = await fs.readFile(filePath, "utf8");
+                        const res = await convertCode(code, filePath);
+                        results.push({
+                            filePath,
+                            original: code,
+                            converted: res.converted,
+                            diagnostics: res.diagnostics,
+                            error: res.error,
+                        });
+                    }
+                    catch (err) {
+                        let errorMsg = "Unknown error";
+                        if (err instanceof Error)
+                            errorMsg = err.message;
+                        results.push({ filePath, error: errorMsg });
+                    }
+                }
+                return { results };
+            });
+            // ---- Improved Dry Run IPC ----
+            ipcMain.handle("conversion:dryrun", async (_e, filePaths) => {
+                const previews = [];
+                for (const filePath of filePaths) {
+                    try {
+                        const code = await fs.readFile(filePath, "utf8");
+                        const res = await convertCode(code, filePath);
+                        previews.push({
+                            filePath,
+                            original: code,
+                            converted: res.converted,
+                            diagnostics: res.diagnostics,
+                            error: res.error,
+                            diff: res.converted !== code ? "[diff available]" : null, // mock diff
+                        });
+                    }
+                    catch (err) {
+                        let errorMsg = "Unknown error";
+                        if (err instanceof Error)
+                            errorMsg = err.message;
+                        previews.push({ filePath, error: errorMsg });
+                    }
+                }
+                return { previews };
+            });
             async function readDirRecursive(root) {
                 let entries;
                 try {

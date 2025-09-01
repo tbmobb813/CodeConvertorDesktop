@@ -211,7 +211,28 @@ function App() {
   };
 
   // ===== UI Components =====
-  const Tree: React.FC<{ nodes: FsNode[]; onOpen: (n: FsNode) => void }> = ({ nodes, onOpen }) => {
+    const Tree: React.FC<{ nodes: FsNode[]; onOpen: (n: FsNode) => void }> = ({ nodes, onOpen }) => {
+      // Handler functions go here
+      const handleCreate = async (parent: FsNode, isDir: boolean) => {
+  const name = prompt(`Enter ${isDir ? "folder" : "file"} name:`);
+  if (!name) return;
+  const newPath = parent.path + "/" + name;
+  await window.api.createFileOrDir(newPath, isDir);
+  await refreshWorkspace();
+};
+      const handleRename = async (node: FsNode) => {
+  const name = prompt("Enter new name:", node.name);
+  if (!name || name === node.name) return;
+  const newPath = node.path.substring(0, node.path.lastIndexOf("/") + 1) + name;
+  await window.api.renameFileOrDir(node.path, newPath);
+  await refreshWorkspace();
+};
+        const handleDelete = async (node: FsNode) => {
+  if (!confirm(`Delete ${node.type === "dir" ? "folder" : "file"} '${node.name}'?`)) return;
+  await window.api.deleteFileOrDir(node.path);
+  await refreshWorkspace();
+};
+        
     return (
       <ul style={{ listStyle: 'none', paddingLeft: 14 }}>
         {nodes.map((n) => (
